@@ -5,12 +5,13 @@
 # Created Date: Saturday April 4th 2020
 # Author: Chen Xuanhong
 # Email: chenxuanhongzju@outlook.com
-# Last Modified:  Friday, 25th September 2020 2:15:54 pm
+# Last Modified:  Saturday, 10th October 2020 5:37:12 pm
 # Modified By: Chen Xuanhong
 # Copyright (c) 2020 Shanghai Jiao Tong University
 #############################################################
 
 import os
+import glob
 import torch
 import random
 from PIL import Image
@@ -85,8 +86,6 @@ class DataPrefetcher():
     def __len__(self):
         """Return the number of images."""
         return len(self.loader)
-
-    
 
 class TotalDataset(data.Dataset):
     """Dataset class for the Artworks dataset and content dataset."""
@@ -202,6 +201,49 @@ def GetLoader(s_image_dir,c_image_dir,
                     drop_last=True,shuffle=True,num_workers=num_workers,pin_memory=True)
     prefetcher = DataPrefetcher(content_data_loader)
     return prefetcher
+
+def GetValiDataTensors(
+                image_dir,
+                selected_imgs=[],
+                crop_size=178
+            ):
+            
+    transforms = []
+    
+    transforms.append(T.Resize(768))
+
+    transforms.append(T.RandomCrop(crop_size,pad_if_needed=True,padding_mode='reflect'))
+
+    transforms.append(T.ToTensor())
+
+    transforms.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+    
+    transforms = T.Compose(transforms)
+
+    result_img   = []
+    if len(selected_imgs) != 0:
+        for s_img in selected_imgs:
+            temp_img = os.path.join(image_dir, s_img)
+            temp_img = Image.open(temp_img)
+            temp_img = transforms(temp_img).cuda().unsqueeze(0)
+            result_img.append(temp_img)
+    else:
+        s_imgs = glob.glob(os.path.join(image_dir, '*.jpg'))
+        for s_img in s_imgs:
+            temp_img = os.path.join(image_dir, s_img)
+            temp_img = Image.open(temp_img)
+            temp_img = transforms(temp_img).cuda().unsqueeze(0)
+            result_img.append(temp_img)
+        s_imgs = glob.glob(os.path.join(image_dir, '*.png'))
+        for s_img in s_imgs:
+            temp_img = os.path.join(image_dir, s_img)
+            temp_img = Image.open(temp_img)
+            temp_img = transforms(temp_img).cuda().unsqueeze(0)
+            result_img.append(temp_img)
+    print("Finish to read validation data......")
+    print("Total validation images: %d"%len(result_img))
+    return result_img
+
 
 if __name__ == "__main__":
     from torchvision.utils import save_image
