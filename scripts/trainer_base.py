@@ -22,68 +22,7 @@ from model.Fusion import *
 from components.utils import *
 from components.transformer import Transformer
 from components.reporter import Reporter
-
-# class ValidationDataLoader(object):
-#     """Dataset class for the Artworks dataset and content dataset."""
-#     def __init__(self, content_image_dir,style_image_dir,
-#                     selectedContent,selectedStyle,
-#                     content_transform,style_transform,
-#                     subffix='jpg', random_seed=1234):
-#         """Initialize and preprocess the CelebA dataset."""
-#         self.content_image_dir= content_image_dir
-#         self.style_image_dir  = style_image_dir
-#         self.content_transform= content_transform
-#         self.style_transform  = style_transform
-#         self.selectedContent  = selectedContent
-#         self.selectedStyle    = selectedStyle
-#         self.subffix            = subffix
-#         self.content_dataset    = []
-#         self.art_dataset        = []
-#         self.random_seed= random_seed
-#         self.__preprocess__()
-#         self.num_images = len(self.content_dataset)
-#         self.art_num    = len(self.art_dataset)
-
-#     def __preprocess__(self):
-#         """Preprocess the Artworks dataset."""
-#         print("processing content images...")
-#         for dir_item in self.selectedContent:
-#             join_path = Path(self.content_image_dir,dir_item)#.replace('/','_'))
-#             if join_path.exists():
-#                 print("processing %s"%dir_item)
-#                 images = join_path.glob('*.%s'%(self.subffix))
-#                 for item in images:
-#                     self.content_dataset.append(item)
-#             else:
-#                 print("%s dir does not exist!"%dir_item)
-#         label_index = 0
-#         print("processing style images...")
-#         for class_item in self.selectedStyle:
-#             images = Path(self.style_image_dir).glob('%s/*.%s'%(class_item, self.subffix))
-#             for item in images:
-#                 self.art_dataset.append([item, label_index])
-#             label_index += 1
-#         random.seed(self.random_seed)
-#         random.shuffle(self.content_dataset)
-#         random.shuffle(self.art_dataset)
-#         # self.dataset = images
-#         print('Finished preprocessing the Art Works dataset, total image number: %d...'%len(self.art_dataset))
-#         print('Finished preprocessing the Content dataset, total image number: %d...'%len(self.content_dataset))
-
-#     def __getitem__(self, index):
-#         """Return one image and its corresponding attribute label."""
-#         filename        = self.content_dataset[index]
-#         image           = Image.open(filename)
-#         content         = self.content_transform(image)
-#         art_index       = random.randint(0,self.art_num-1)
-#         filename,label  = self.art_dataset[art_index]
-#         image           = Image.open(filename)
-#         style           = self.style_transform(image)
-#         return content,style,label
-
-#     def __len__(self):
-#         """Return the number of images."""
-#         return self.num_images
+from components.style_transfer_losses import TransformLossBlock
 
 class Trainer_Base(object):
     def __init__(self, config):
@@ -94,6 +33,8 @@ class Trainer_Base(object):
                 transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
             ])
         self.criterion = torch.nn.MSELoss(reduction='mean')
+        self.L1_loss   = torch.nn.L1Loss()
+        self.transform_loss = TransformLossBlock().cuda()
 
         self.version_dir = f'{config.save_dir}/{config.version}'
         self.model_state_dir = f'{config.save_dir}/{config.version}/model_state'
@@ -149,8 +90,8 @@ class Trainer_Base(object):
                        'patchsize11','patchsize13']
         fix_contents = glob.glob(self.config.fix_data_dir+'/*.jpg')[:5]
         tosave = []
-        loss_perc = []
-        loss_cont = []
+        loss_content_list = []
+        loss_style_list = []
         for i,C in enumerate(fix_contents):
             c = Image.open(C)
             c = self.trans(c).cuda().unsqueeze(0)
@@ -167,20 +108,24 @@ class Trainer_Base(object):
                     fea_c = self.encoder(c)
                     fea_s = self.encoder(s)
 
-                    out_feature, _ = self.attention1(fea_c, fea_s)
+                    out_feature, _  = self.attention1(fea_s, fea_c)
 
-                    stylized = self.decoder(out_feature)
+                    stylized        = self.decoder(out_feature)
+                    result_feat     = self.encoder(stylized)
 
-                    c1,c2,c3,_ = self.D(c)
-                    h1,h2,h3,_ = self.D(stylized)
-                    s1,s2,s3,_ = self.D(s)
+                    h1,h2,h3,h4 = self.D(stylized)
+                    s1,s2,s3,s4 = self.D(s)
 
-                    loss_content = self.criterion(c3,h3)
-                    loss_perceptual = 0
-                    for t in range(3):
-                        loss_perceptual += self.criterion( gram_matrix(eval('s'+str(t+1))), gram_matrix(eval('h'+str(t+1))) )
-                    loss_perc.append(self.config.content_weight*loss_content.cpu().item())
-                    loss_cont.append(self.config.style_weight*loss_perceptual.cpu().item())
+                    loss_transform  = self.criterion(self.transform_loss(stylized),self.transform_loss(c))
+                    loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
+                    loss_content    = self.config.feature_weight * loss_perce + \
+                                        self.config.transform_weight * loss_transform
+                    loss_style = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
+                        self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
+                        self.criterion(gram_matrix_cxh(s3), gram_matrix_cxh(h3)) + \
+                        self.criterion(gram_matrix_cxh(s4), gram_matrix_cxh(h4))
+                    loss_content_list.append(loss_content.cpu().item())
+                    loss_style_list.append(self.config.style_weight*loss_style.cpu().item())
                 outs.append(align_shape(stylized, c))
                 styles.append(s)
 
@@ -190,4 +135,4 @@ class Trainer_Base(object):
                 tosave.append(style[0])
             tosave.append(out[0])
 
-        return torch.cat(tosave,2), sum(loss_perc)/len(loss_perc), sum(loss_cont)/len(loss_cont)
+        return torch.cat(tosave,2), sum(loss_content_list)/len(loss_content_list), sum(loss_style_list)/len(loss_style_list)

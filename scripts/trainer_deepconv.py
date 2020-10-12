@@ -20,8 +20,9 @@ from scripts.trainer_base import Trainer_Base
 
 from components.reporter import Reporter
 from components.utils import gram_matrix_cxh
-from components.transformer_conv import Transformer
-from components.data_loader_styletransfer_conditional import GetLoader,denorm
+# from components.transformer_conv import Transformer
+from components.new_transformer import AttentionModule
+from components.data_loader_styletransfer_conditional import GetLoader,denorm,GetValiDataTensors
 
 class Trainer(Trainer_Base):
 
@@ -29,11 +30,12 @@ class Trainer(Trainer_Base):
         self.encoder = Encoder(self.config.channels).cuda()
         self.decoder = Decoder(self.config.channels).cuda()
         self.D = VGG16_mid().cuda()
-        self.attention1 = Transformer(4,self.config.channels*8,self.config.topk,True,False).cuda()
+        self.attention1 = AttentionModule(self.config.channels*8).cuda()
 
     def train(self):
         self.create_model()
-        losses      = {'perceptual':[], 'content':[]}
+        
+        losses      = {'style':[], 'content':[]}
         optimizer   = torch.optim.Adam(itertools.chain( self.attention1.parameters(), 
                                         self.encoder.parameters(), 
                                         self.decoder.parameters()), 
@@ -41,8 +43,6 @@ class Trainer(Trainer_Base):
         
         # criterion   = torch.nn.L2Loss()
         # self.criterion = torch.nn.MSELoss(reduction='mean')
-
-        
 
         total_loader  = GetLoader(self.config.style_dir, self.config.content_dir,
                             self.config.selected_style_dir, self.config.selected_content_dir,
@@ -68,23 +68,26 @@ class Trainer(Trainer_Base):
                 fea_c   = self.encoder(content)
                 fea_s   = self.encoder(style)
                 
-                out_feature, attention_map = self.attention1(fea_c, fea_s)
+                out_feature, _ = self.attention1(fea_s, fea_c)
                 out_content     = self.decoder(out_feature)
+                result_feat     = self.encoder(out_content)
                 
                 # _, _, c3, _     = self.D(content)
                 h1, h2, h3, h4  = self.D(out_content)
                 s1, s2, s3, s4  = self.D(style)
 
                 # loss_content= self.criterion(c3,h3)
-                loss_content= self.criterion(out_content,content)
-                loss_style  = 0
+                loss_transform  = self.criterion(self.transform_loss(out_content),self.transform_loss(content))
+                loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
+                loss_content    = self.config.feature_weight * loss_perce + \
+                                    self.config.transform_weight * loss_transform
                 # for t in range(4):
                 loss_style = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
                         self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
                         self.criterion(gram_matrix_cxh(s3), gram_matrix_cxh(h3)) + \
                         self.criterion(gram_matrix_cxh(s4), gram_matrix_cxh(h4))
 
-                loss = loss_content*self.config.content_weight + loss_style*self.config.style_weight
+                loss = loss_content + loss_style*self.config.style_weight
 
                 if num_iter%200 == 0:
                     print(
@@ -101,31 +104,30 @@ class Trainer(Trainer_Base):
                 otherStyleTime = now.strftime("%Y-%m-%d %H:%M:%S")
                 print(otherStyleTime)
                 print('epoch: ',num_epoch ,' iter: ',num_iter)
-                print('attention scartters: ', torch.std(attention_map.argmax(-1).float(), 1).mean().cpu())
-                print(attention_map.shape)
+                # print('attention scartters: ', torch.std(attention_map.argmax(-1).float(), 1).mean().cpu())
+                # print(attention_map.shape)
 
-                self.attention1.hard = True
+                # self.attention1.hard = True
                 self.attention1.eval()
                 self.encoder.eval()
                 self.decoder.eval()
 
-                tosave,perc,cont = self.eval()
+                tosave,loss_content,loss_style = self.eval()
                 save_image(denorm(tosave), self.image_dir+'/epoch_{}-iter_{}.png'.format(num_epoch,num_iter))
                 print("image saved to " + self.image_dir + '/epoch_{}-iter_{}.png'.format(num_epoch,num_iter))
-                print('content loss:', cont)
-                print('perceptual loss:', perc)
+                print('content loss:', loss_content)
+                print('style loss:', loss_style)
 
                 self.reporter.writeTrainLog(num_epoch,num_iter,f'''
-                    attention scartters: {torch.std(attention_map.argmax(-1).float(), 1).mean().cpu()}\n
-                    content loss: {cont}\n
-                    perceptual loss: {perc}
+                    content loss: {loss_content}\n
+                    style loss: {loss_style}
                 ''')
 
-                losses['perceptual'].append(perc)
-                losses['content'].append(cont)
+                losses['style'].append(loss_style)
+                losses['content'].append(loss_content)
                 self.plot_loss_curve(losses)
 
-                self.attention1.hard = False
+                # self.attention1.hard = False
                 self.attention1.train()
                 self.encoder.train()
                 self.decoder.train()

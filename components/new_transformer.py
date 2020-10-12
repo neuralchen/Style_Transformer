@@ -9,6 +9,40 @@ import math
 from components.utils import *
 
 
+class AttentionModule(nn.Module):
+    """ Self attention Layer"""
+    def __init__(self,in_dim):
+        super(AttentionModule,self).__init__()
+        self.chanel_in = in_dim
+        # self.activation = activation
+        
+        self.query_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//4 , kernel_size= 1)
+        self.key_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//4 , kernel_size= 1)
+        self.value_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1)
+        self.value_c_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1)
+        self.softmax  = nn.Softmax(dim=-1) #
+    def forward(self,key_s,query_c):
+        """
+            inputs :
+                x : input feature maps( B X C X W X H)
+            returns :
+                out : self attention value + input feature 
+                attention: B X N X N (N is Width*Height)
+        """
+        m_batchsize,C,width ,height = key_s.size()
+        value_s     = key_s
+        proj_query  = self.query_conv(query_c).view(m_batchsize,-1,width*height).permute(0,2,1) # B X CX(N)
+        proj_key    =  self.key_conv(key_s).view(m_batchsize,-1,width*height) # B X C x (*W*H)
+        energy      =  torch.bmm(proj_query,proj_key) # transpose check
+        attention   = self.softmax(energy) # BX (N) X (N) 
+        proj_value  = self.value_conv(value_s).view(m_batchsize,-1,width*height) # B X C X N
+        proj_content= self.value_c_conv(query_c)
+        out = torch.bmm(proj_value,attention.permute(0,2,1))
+        out = out.view(m_batchsize,C,width,height)
+        
+        out = out + proj_content
+        return out,attention
+
 class Transformer(nn.Module):
     def __init__(self, head_num, hidden_size, N = 1, hard = False, drop = True):
         super(Transformer, self).__init__()
@@ -50,9 +84,9 @@ class MultiHead(nn.Module):
         content_states = content.view(b,c,-1).transpose(-1,-2)  ### b * wh * c
         reference_states = reference.view(b,c,-1).transpose(-1,-2)  ### b * wh * c
 
-        mixed_query_layer = self.query(content_states)
-        mixed_key_layer = self.key(reference_states)
-        mixed_value_layer = self.value(reference_states)  ### b * wh * dim
+        mixed_query_layer   = self.query(content_states)
+        mixed_key_layer     = self.key(reference_states)
+        mixed_value_layer   = self.value(reference_states)  ### b * wh * dim
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)

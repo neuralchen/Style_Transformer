@@ -15,8 +15,8 @@ def getParameters():
     # Basic information
     parser.add_argument('--content', type=str, default='decoder', choices=['decoder', 'test'])
     parser.add_argument('--cuda_id', type=int, default=0)
-    parser.add_argument('--version', type=str, default='L2_0')
-    parser.add_argument('--description', type=str, default='采用L2来约束风格迁移以后的图片')
+    parser.add_argument('--version', type=str, default='attention_0')
+    parser.add_argument('--description', type=str, default='修改了attention的结构，参考了洋葱皮那一篇')
     # AE training setting
     parser.add_argument('--total_epoch', type=int, default=50)
     parser.add_argument('--image_size', type=int, default=256)
@@ -32,8 +32,10 @@ def getParameters():
     parser.add_argument('--script_name', type=str, default='deepconv')
     parser.add_argument('--save_dir', type=str, default='./logs')
     parser.add_argument('--topk', type=int, default=1)
-    parser.add_argument('--style_weight', type=float, default=150000)
-    parser.add_argument('--content_weight', type=float, default=1)
+    parser.add_argument('--style_weight', type=float, default=15000)
+
+    parser.add_argument('--feature_weight', type=float, default=1)
+    parser.add_argument('--transform_weight', type=float, default=1)
     parser.add_argument('--image_crop_size', type=int, default=512)
     parser.add_argument('--selected_content_dir', nargs='+', help='selected style dir for training', 
         default=['a/abbey', 'a/arch', 'a/amphitheater', 'a/aqueduct', 'a/arena/rodeo', 'a/athletic_field/outdoor',
@@ -72,7 +74,7 @@ def getParameters():
 def main(config):
     cudnn.benchmark = True
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config.cuda_id)
-    print(torch.cuda.get_device_name(0))
+    print(torch.cuda.get_device_name(0),"--%d GPU"%config.cuda_id)
     GPUtil.showUtilization()
     if config.content == 'decoder':
         package  = __import__('scripts.trainer_'+config.script_name, fromlist=True)
