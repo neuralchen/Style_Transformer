@@ -105,28 +105,40 @@ class Trainer_Base(object):
                 s = self.trans(s).cuda().unsqueeze(0)
 
                 with torch.no_grad():
-                    fea_c = self.encoder(c)
-                    fea_s = self.encoder(s)
-
+                    fea_c   = self.encoder(c)
+                    fea_s   = self.encoder(s)
+                    
                     out_feature, _  = self.attention1(fea_s, fea_c)
 
-                    stylized        = self.decoder(out_feature)
-                    result_feat     = self.encoder(stylized)
+                    identity_c,_    = self.attention1(fea_c, fea_c)
+                    identity_s,_    = self.attention1(fea_s, fea_s)
 
-                    h1,h2,h3,h4 = self.D(stylized)
-                    s1,s2,s3,s4 = self.D(s)
+                
+                    out_content     = self.decoder(out_feature)
 
-                    loss_transform  = self.criterion(self.transform_loss(stylized),self.transform_loss(c))
-                    loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
-                    loss_content    = self.config.feature_weight * loss_perce + \
-                                        self.config.transform_weight * loss_transform
-                    loss_style = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
-                        self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
-                        self.criterion(gram_matrix_cxh(s3), gram_matrix_cxh(h3)) + \
-                        self.criterion(gram_matrix_cxh(s4), gram_matrix_cxh(h4))
+                    rec_s           = self.decoder(identity_s)
+                    rec_c           = self.decoder(identity_c)
+
+                    # _, _, c3, _     = self.D(content)
+                    h1, h2, h3, h4  = self.D(out_content)
+                    s1, s2, s3, s4  = self.D(s)
+
+                    # loss_perce      = self.L1_loss(c3,h3)
+                    # loss_transform  = self.criterion(self.transform_loss(out_content),self.transform_loss(content))
+                    # loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
+                    loss_content    = self.criterion(out_content, c)
+                    # loss_content = loss_content - criterion(image_c.mean(-1), stylized_c.mean(-1))
+                    loss_content    = loss_content + self.criterion(rec_s, s) + self.criterion(rec_c, c)
+                    # loss_content    = self.config.feature_weight * loss_perce + \
+                    #                     self.config.transform_weight * loss_transform
+                    loss_content    = self.config.feature_weight * loss_content
+                    loss_style      = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
+                                        self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
+                                        self.criterion(gram_matrix_cxh(s3), gram_matrix_cxh(h3)) + \
+                                        self.criterion(gram_matrix_cxh(s4), gram_matrix_cxh(h4))
                     loss_content_list.append(loss_content.cpu().item())
                     loss_style_list.append(self.config.style_weight*loss_style.cpu().item())
-                outs.append(align_shape(stylized, c))
+                outs.append(align_shape(out_content, c))
                 styles.append(s)
 
             out = torch.cat(outs, 2)

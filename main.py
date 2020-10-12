@@ -15,13 +15,13 @@ def getParameters():
     # Basic information
     parser.add_argument('--content', type=str, default='decoder', choices=['decoder', 'test'])
     parser.add_argument('--cuda_id', type=int, default=0)
-    parser.add_argument('--version', type=str, default='attention_0')
-    parser.add_argument('--description', type=str, default='修改了attention的结构，参考了洋葱皮那一篇')
+    parser.add_argument('--version', type=str, default='attention_2')
+    parser.add_argument('--description', type=str, default='修改了attention的结构，参考了洋葱皮那一篇，加入自己换自己的loss')
     # AE training setting
     parser.add_argument('--total_epoch', type=int, default=50)
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--batch_size', type=int, default=24)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--channels', type=int, default=24)
     parser.add_argument('--log_interval', type=int, default=1)

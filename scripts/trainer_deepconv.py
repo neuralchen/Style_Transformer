@@ -68,19 +68,30 @@ class Trainer(Trainer_Base):
                 fea_c   = self.encoder(content)
                 fea_s   = self.encoder(style)
                 
-                out_feature, _ = self.attention1(fea_s, fea_c)
+                out_feature, _  = self.attention1(fea_s, fea_c)
+
+                identity_c,_ = self.attention1(fea_c, fea_c)
+                identity_s,_ = self.attention1(fea_s, fea_s)
+
+            
                 out_content     = self.decoder(out_feature)
-                result_feat     = self.encoder(out_content)
-                
+
+                rec_s           = self.decoder(identity_s)
+                rec_c           = self.decoder(identity_c)
+
                 # _, _, c3, _     = self.D(content)
                 h1, h2, h3, h4  = self.D(out_content)
                 s1, s2, s3, s4  = self.D(style)
 
-                # loss_content= self.criterion(c3,h3)
-                loss_transform  = self.criterion(self.transform_loss(out_content),self.transform_loss(content))
-                loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
-                loss_content    = self.config.feature_weight * loss_perce + \
-                                    self.config.transform_weight * loss_transform
+                # loss_perce      = self.L1_loss(c3,h3)
+                # loss_transform  = self.criterion(self.transform_loss(out_content),self.transform_loss(content))
+                # loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
+                loss_content    = self.criterion(out_content, content)
+                # loss_content = loss_content - criterion(image_c.mean(-1), stylized_c.mean(-1))
+                loss_content    = loss_content + self.criterion(rec_s, style) + self.criterion(rec_c, content)
+                # loss_content    = self.config.feature_weight * loss_perce + \
+                #                     self.config.transform_weight * loss_transform
+                loss_content    = self.config.feature_weight * loss_content
                 # for t in range(4):
                 loss_style = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
                         self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
