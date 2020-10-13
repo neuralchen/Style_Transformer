@@ -5,7 +5,7 @@
 # Created Date: Saturday April 4th 2020
 # Author: Chen Xuanhong
 # Email: chenxuanhongzju@outlook.com
-# Last Modified:  Tuesday, 13th October 2020 12:44:22 pm
+# Last Modified:  Tuesday, 13th October 2020 12:45:27 pm
 # Modified By: Chen Xuanhong
 # Copyright (c) 2020 Shanghai Jiao Tong University
 #############################################################
@@ -295,4 +295,4 @@ if __name__ == "__main__":
          'w/wheat_field', 'z/zen_garden', 'a/alcove', 'a/apartment-building/outdoor', 'a/artists_loft',
          'b/building_facade', 'c/cemetery']
     content_images = "/disk1/cxh/styletransfer_data/Place365/data_large/"
-    ExcludeImags(style_images,seleced_style)
+    ScanAbnormalImg(content_images,selected_imgs)
