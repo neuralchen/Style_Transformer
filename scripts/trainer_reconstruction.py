@@ -1,3 +1,16 @@
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+#############################################################
+# File: trainer_deepconv copy.py
+# Created Date: Tuesday October 13th 2020
+# Author: Chen Xuanhong
+# Email: chenxuanhongzju@outlook.com
+# Last Modified:  Tuesday, 13th October 2020 12:40:30 am
+# Modified By: Chen Xuanhong
+# Copyright (c) 2020 Shanghai Jiao Tong University
+#############################################################
+
+
 import os
 import glob
 import torch
@@ -77,23 +90,18 @@ class Trainer(Trainer_Base):
                 rec_s           = self.decoder(identity_s)
                 rec_c           = self.decoder(identity_c)
 
-                result_feat     = self.encoder(out_content)
+                # result_feat     = self.encoder(out_content)
 
                 # _, _, c3, _     = self.D(content)
                 h1, h2, h3, h4  = self.D(out_content)
                 s1, s2, s3, s4  = self.D(style)
 
                 # loss_perce      = self.L1_loss(c3,h3)
-                loss_transform  = self.criterion(self.transform_loss(out_content),self.transform_loss(content))
-                loss_transform  += self.criterion(self.transform_loss(rec_s),self.transform_loss(style))
-                loss_transform  += self.criterion(self.transform_loss(rec_c),self.transform_loss(content))
-                loss_perce      = self.L1_loss(fea_c, result_feat) # style aware loss
-                # loss_content    = self.criterion(out_content, content)
-                # loss_content = loss_content - criterion(image_c.mean(-1), stylized_c.mean(-1))
-                # loss_content    = loss_content + self.criterion(rec_s, style) + self.criterion(rec_c, content)
-                loss_content    = self.config.feature_weight * loss_perce + \
-                                    self.config.transform_weight * loss_transform
-                # loss_content    = self.config.feature_weight * loss_content
+                loss_content    = self.criterion(out_content, content)
+                loss_content    = loss_content + self.criterion(rec_s, style) + self.criterion(rec_c, content)
+                # loss_content    = self.config.feature_weight * loss_perce + \
+                #                     self.config.transform_weight * loss_transform
+                loss_content    = self.config.feature_weight * loss_content
                 loss_style = self.criterion(gram_matrix_cxh(s1), gram_matrix_cxh(h1)) + \
                         self.criterion(gram_matrix_cxh(s2), gram_matrix_cxh(h2)) + \
                         self.criterion(gram_matrix_cxh(s3), gram_matrix_cxh(h3)) + \
