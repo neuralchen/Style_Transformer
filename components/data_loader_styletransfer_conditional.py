@@ -5,7 +5,7 @@
 # Created Date: Saturday April 4th 2020
 # Author: Chen Xuanhong
 # Email: chenxuanhongzju@outlook.com
-# Last Modified:  Tuesday, 13th October 2020 1:11:28 am
+# Last Modified:  Tuesday, 13th October 2020 12:44:22 pm
 # Modified By: Chen Xuanhong
 # Copyright (c) 2020 Shanghai Jiao Tong University
 #############################################################
@@ -245,23 +245,28 @@ def GetValiDataTensors(
     print("Total validation images: %d"%len(result_img))
     return result_img
 
-def ExcludeImags(image_dir, selected_imgs):
-        """Preprocess the Artworks dataset."""
-        print("processing images...")
-        subffix = "jpg"
-        for dir_item in selected_imgs:
-            join_path = Path(image_dir,dir_item)#.replace('/','_'))
-            if join_path.exists():
-                print("processing %s"%dir_item)
-                images = join_path.glob('*.%s'%(subffix))
-                for item in images:
-                    temp = Image.open(item)
-                    print(temp.shape())
-            else:
-                print("%s dir does not exist!"%dir_item)
-                
-        print('Finished preprocessing the Art Works dataset, total image number: %d...'%len(self.art_dataset))
-        print('Finished preprocessing the Content dataset, total image number: %d...'%len(self.content_dataset))
+def ScanAbnormalImg(image_dir, selected_imgs):
+    """Scan the dataset, this function is designed to exclude or remove the non-RGB images."""
+    print("processing images...")
+    subffix = "jpg"
+    for dir_item in selected_imgs:
+        join_path = Path(image_dir,dir_item)#.replace('/','_'))
+        if join_path.exists():
+            print("processing %s"%dir_item)
+            images = join_path.glob('*.%s'%(subffix))
+            for item in images:
+                # print(str(item.name)[0:6])
+                # temp = cv2.imread(str(item))
+                temp = Image.open(item)
+                # exclude the abnormal images
+                if temp.mode!="RGB":
+                    print(temp.mode)
+                    print("Found one abnormal image!")
+                    print(item)
+                    os.remove(str(item))
+
+        else:
+            print("%s dir does not exist!"%dir_item)
 
 if __name__ == "__main__":
     seleced_style = ["vangogh", "samuel", "picasso", "kandinsky", "monet", "nicholas", "berthe-morisot"]
